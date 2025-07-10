@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pydidit-cli = "pydiditcli:main"
+pydidit-cli = "pydiditcli:app"
 
 [tool.poetry]
 packages = [
