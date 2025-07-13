@@ -538,7 +538,7 @@ sqlalchemy = ">=2.0.41,<3.0.0"
 type = "git"
 url = "https://github.com/adamlincoln/pydidit2-backend.git"
 reference = "HEAD"
-resolved_reference = "98306c509bbd2d2ca0a6fcbd71f367483f2ff911"
+resolved_reference = "3da34e24bcf302dd5fec2cb11eb222c5a6e1aa34"
 
 [[package]]
 name = "pygments"
