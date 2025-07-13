@@ -1,13 +1,17 @@
 import os
+from urllib.parse import urlparse
 
 import pydiditbackend as backend
+from pydiditbackend.utils import build_rds_db_url
 import typer
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
 
 app = typer.Typer()
 
-sessionmaker = sqlalchemy_sessionmaker(create_engine(os.environ["PYDIDIT_DB_URL"]))
+db_url = build_rds_db_url(os.environ["PYDIDIT_DB_URL"])
+
+sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
 @app.command()
