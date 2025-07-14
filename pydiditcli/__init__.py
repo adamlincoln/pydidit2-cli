@@ -44,5 +44,13 @@ def delete(model_name: str, instance_id: int) -> None:
 def complete(model_name: str, instance_id: int) -> None:
     backend.mark_completed(model_name, instance_id)
 
+@app.command()
+def contain_todo(project_id: int, todo_id: int) -> None:
+    with sessionmaker() as session, session.begin():
+        project = backend.get("Project", filter_by={"id": project_id}, session=session)[0]
+        project.contain_todos.append(
+            backend.get("Todo", filter_by={"id": todo_id}, session=session)[0]
+        )
+
 if __name__ == "__main__":
     app()
