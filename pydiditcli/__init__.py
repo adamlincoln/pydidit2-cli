@@ -6,7 +6,7 @@ import typer
 from pydiditbackend.utils import build_rds_db_url
 from rich import print as rich_print
 from rich.markup import escape
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, or_
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
 
 app = typer.Typer()
@@ -17,13 +17,13 @@ sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
 backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] ({self.state}) {escape("[")}{escape("]")}"
-backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] ({self.state}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.contain_todos)}[/italic]"
+backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.contain_todos)}[/italic]"
 
 @app.command()
 def get(
     model_name: str,
     primary_descriptor: Annotated[
-        str,
+        str | None,
         typer.Argument(),
     ] = None,
     *,
@@ -46,14 +46,40 @@ def get(
         rich_print(el)
 
 @app.command()
-def put(model_name: str, primary_descriptor: str) -> None:
-    model = getattr(backend.models, model_name)
-    kwargs = {
-        model.primary_descriptor: primary_descriptor,
-        "state": backend.models.enums.State.active,
-    }
-    instance = model(**kwargs)
-    backend.put(instance)
+def put(
+    model_name: str,
+    primary_descriptor: str,
+    projects: Annotated[
+        list[str] | None,
+        typer.Option("--project", "-p"),
+    ] = None,
+) -> None:
+    with sessionmaker() as session, session.begin():
+        model = getattr(backend.models, model_name)
+        kwargs = {
+            model.primary_descriptor: primary_descriptor,
+            "state": backend.models.enums.State.active,
+        }
+        instance = model(**kwargs)
+
+        if projects is not None:
+            unique_projects = set(projects)
+            project_ids = {potential_id for potential_id in unique_projects if potential_id.isdigit()}
+            project_descriptions = unique_projects - project_ids
+            project_instances = backend.get(
+                "Project",
+                where=or_(
+                    backend.models.Project.description.in_(project_descriptions),
+                    backend.models.Project.id.in_(project_ids),
+                ),
+                session=session,
+            )
+            if len(project_instances) == 0:
+                raise ValueError("There are no matching projects.")
+
+            instance.contained_by_projects.extend(project_instances)
+
+        backend.put(instance, session=session)
 
 @app.command()
 def delete(model_name: str, instance_id: int) -> None:
@@ -68,7 +94,7 @@ def contain_todo(project_id: int, todo_id: int) -> None:
     with sessionmaker() as session, session.begin():
         project = backend.get("Project", filter_by={"id": project_id}, session=session)[0]
         project.contain_todos.append(
-            backend.get("Todo", filter_by={"id": todo_id}, session=session)[0]
+            backend.get("Todo", filter_by={"id": todo_id}, session=session)[0],
         )
 
 if __name__ == "__main__":
