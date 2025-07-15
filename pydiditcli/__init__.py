@@ -57,16 +57,19 @@ def get(
         typer.Option("--tag", "-g"),
     ] = None,
 ) -> None:
-    filter_by = {}
+    kwargs = {
+        "include_completed": include_completed,
+    }
     if primary_descriptor is not None:
-        filter_by[getattr(
-            backend.models,
-            model_name,
-        ).primary_descriptor] = primary_descriptor
+        kwargs["filter_by"] = {
+            getattr(
+                backend.models,
+                model_name,
+            ).primary_descriptor: primary_descriptor
+        }
     for el in backend.get(
         model_name,
-        include_completed=include_completed,
-        filter_by=filter_by,
+        **kwargs,
     ):
         rich_print(el)
 
