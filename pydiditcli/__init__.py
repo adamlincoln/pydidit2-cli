@@ -1,4 +1,6 @@
 import os
+from collections.abc import Iterable
+from functools import partial
 from itertools import product
 from typing import Annotated
 
@@ -17,9 +19,22 @@ db_url = build_rds_db_url(os.environ["PYDIDIT_DB_URL"])
 sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
-backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] ({self.state}) {escape("[")}Tags: {", ".join(tag.name for tag in self.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in self.contained_by_projects)}{escape("]")}"
+backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}) {escape("[")}Tags: {", ".join(tag.name for tag in self.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in self.contained_by_projects)}{escape("]")}"
 backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.contain_todos)}[/italic]"
 backend.models.Tag.__rich__ = lambda self: f"[bold]{self.name}[/bold] (ID {self.id}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.todos)}[/italic]"
+
+def _build_related_filter(model_name: str, identifiers: Iterable[str]):
+    unique_identifiers = set(identifiers)
+    ids = {potential_id for potential_id in unique_identifiers if potential_id.isdigit()}
+    primary_descriptors = unique_identifiers - ids
+    model = getattr(backend.models, model_name)
+    return or_(
+        getattr(model, model.primary_descriptor).in_(primary_descriptors),
+        model.id.in_(ids),
+    )
+
+_build_project_filter = partial(_build_related_filter, "Project")
+_build_tag_filter = partial(_build_related_filter, "Tag")
 
 @app.command()
 def get(
@@ -33,6 +48,14 @@ def get(
         bool,
         typer.Option("--all"),
     ] = False,
+    projects: Annotated[
+        list[str] | None,
+        typer.Option("--project", "-p"),
+    ] = None,
+    tags: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-g"),
+    ] = None,
 ) -> None:
     filter_by = {}
     if primary_descriptor is not None:
@@ -70,15 +93,9 @@ def put(
         instance = model(**kwargs)
 
         if projects is not None:
-            unique_projects = set(projects)
-            project_ids = {potential_id for potential_id in unique_projects if potential_id.isdigit()}
-            project_descriptions = unique_projects - project_ids
             project_instances = backend.get(
                 "Project",
-                where=or_(
-                    backend.models.Project.description.in_(project_descriptions),
-                    backend.models.Project.id.in_(project_ids),
-                ),
+                where=_build_project_filter(projects),
                 session=session,
             )
             if len(project_instances) == 0:
@@ -87,15 +104,9 @@ def put(
             instance.contained_by_projects.extend(project_instances)
 
         if tags is not None:
-            unique_tags = set(tags)
-            tag_ids = {potential_id for potential_id in unique_tags if potential_id.isdigit()}
-            tag_descriptions = unique_tags - tag_ids
             tag_instances = backend.get(
                 "Tag",
-                where=or_(
-                    backend.models.Tag.name.in_(tag_descriptions),
-                    backend.models.Tag.id.in_(tag_ids),
-                ),
+                where=_build_tag_filter(tags),
                 session=session,
             )
             if len(tag_instances) == 0:
@@ -110,8 +121,17 @@ def delete(model_name: str, instance_id: int) -> None:
     backend.delete(model_name, instance_id)
 
 @app.command()
-def complete(model_name: str, instance_id: int) -> None:
-    backend.mark_completed(model_name, instance_id)
+def complete(model_name: str, instance_identifier: str) -> None:
+    with sessionmaker() as session, session.begin():
+        filter_by = {}
+        if instance_identifier.isdigit():
+            filter_by["id"] = int(instance_identifier)
+        else:
+            filter_by[getattr(backend.models, model_name).primary_descriptor] = instance_identifier
+        instances = backend.get(model_name, filter_by=filter_by, session=session)
+
+        for instance in instances:
+            backend.mark_completed(model_name, instance.id, session=session)
 
 @app.command()
 def contain_todo(project_id: int, todo_id: int) -> None:
@@ -122,13 +142,13 @@ def contain_todo(project_id: int, todo_id: int) -> None:
         )
 
 @app.command()
-def tag(model_name: str, model_identifier: str, tag_identifier: str) -> None:
+def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
     with sessionmaker() as session, session.begin():
         target_filter_by = {}
-        if model_identifier.isdigit():
-            target_filter_by["id"] = int(model_identifier)
+        if instance_identifier.isdigit():
+            target_filter_by["id"] = int(instance_identifier)
         else:
-            target_filter_by[getattr(backend.models, model_name).primary_descriptor] = model_identifier
+            target_filter_by[getattr(backend.models, model_name).primary_descriptor] = instance_identifier
         instances = backend.get(model_name, filter_by=target_filter_by, session=session)
 
         tag_filter_by = {}
