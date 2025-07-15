@@ -4,6 +4,8 @@ from typing import Annotated
 import pydiditbackend as backend
 import typer
 from pydiditbackend.utils import build_rds_db_url
+from rich import print as rich_print
+from rich.markup import escape
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
 
@@ -14,17 +16,34 @@ db_url = build_rds_db_url(os.environ["PYDIDIT_DB_URL"])
 sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
+backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] ({self.state}) {escape("[")}{escape("]")}"
+backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] ({self.state}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.contain_todos)}[/italic]"
+
 @app.command()
 def get(
     model_name: str,
+    primary_descriptor: Annotated[
+        str,
+        typer.Argument(),
+    ] = None,
     *,
     include_completed: Annotated[
         bool,
         typer.Option("--all"),
     ] = False,
 ) -> None:
-    backend.prepare(sessionmaker)
-    print(backend.get(model_name, include_completed=include_completed))
+    filter_by = {}
+    if primary_descriptor is not None:
+        filter_by[getattr(
+            backend.models,
+            model_name,
+        ).primary_descriptor] = primary_descriptor
+    for el in backend.get(
+        model_name,
+        include_completed=include_completed,
+        filter_by=filter_by,
+    ):
+        rich_print(el)
 
 @app.command()
 def put(model_name: str, primary_descriptor: str) -> None:
