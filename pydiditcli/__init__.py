@@ -9,7 +9,7 @@ import typer
 from pydiditbackend.utils import build_rds_db_url
 from rich import print as rich_print
 from rich.markup import escape
-from sqlalchemy import create_engine, or_
+from sqlalchemy import create_engine, and_, or_
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
 
 app = typer.Typer()
@@ -23,10 +23,14 @@ backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] (I
 backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.contain_todos)}[/italic]"
 backend.models.Tag.__rich__ = lambda self: f"[bold]{self.name}[/bold] (ID {self.id}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.todos)}[/italic]"
 
-def _build_related_filter(model_name: str, identifiers: Iterable[str]):
+def _separate_identifiers(identifiers: Iterable[str]) -> tuple[set[int], set[str]]:
     unique_identifiers = set(identifiers)
     ids = {potential_id for potential_id in unique_identifiers if potential_id.isdigit()}
     primary_descriptors = unique_identifiers - ids
+    return ids, primary_descriptors
+
+def _build_related_filter(model_name: str, identifiers: Iterable[str]):
+    ids, primary_descriptors = _separate_identifiers(identifiers)
     model = getattr(backend.models, model_name)
     return or_(
         getattr(model, model.primary_descriptor).in_(primary_descriptors),
@@ -67,6 +71,14 @@ def get(
                 model_name,
             ).primary_descriptor: primary_descriptor
         }
+    if projects is not None:
+        kwargs["where"] = getattr(backend.models, model_name).contained_by_projects.any(_build_project_filter(projects))
+    if tags is not None:
+        tags_where = getattr(backend.models, model_name).tags.any(_build_tag_filter(tags))
+        if "where" not in kwargs:
+            kwargs["where"] = tags_where
+        else:
+            kwargs["where"] = and_(kwargs["where"], tags_where)
     for el in backend.get(
         model_name,
         **kwargs,
