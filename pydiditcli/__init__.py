@@ -238,5 +238,10 @@ def attach_note(model_name: str, instance_identifier: str, note_identifier: str)
         for instance, note in product(instances, notes):
             instance.notes.append(note)
 
+@app.command()
+def search(search_string: str) -> None:
+    for instance in backend.search(search_string):
+        rich_print(instance)
+
 if __name__ == "__main__":
     app()
