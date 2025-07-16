@@ -20,7 +20,7 @@ sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
 backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}) {escape("[")}Tags: {", ".join(tag.name for tag in self.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in self.contained_by_projects)}{escape("]")}{" :notebook:" if len(self.notes) > 0 else ""}"
-backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}){" :notebook:" if len(self.notes) > 0 else ""}:\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state}){" :notebook:" if len(todo.notes) > 0 else ""}" for todo in self.contain_todos)}[/italic]"
+backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}){" :notebook:" if len(self.notes) > 0 else ""}:\n  [italic]{"\n  ".join(f"* {todo.description} (ID {todo.id}, {todo.state}){" :notebook:" if len(todo.notes) > 0 else ""}" for todo in self.contain_todos)}[/italic]"
 backend.models.Tag.__rich__ = lambda self: f"[bold]{self.name}[/bold] (ID {self.id}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.todos)}[/italic]"
 backend.models.Note.__rich__ = lambda self: f"Note ID {self.id} ({len(self.todos)} todos): [italic]{repr(self)}[/italic]"
 
