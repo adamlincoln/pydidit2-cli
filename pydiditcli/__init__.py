@@ -19,9 +19,10 @@ db_url = build_rds_db_url(os.environ["PYDIDIT_DB_URL"])
 sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
-backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}) {escape("[")}Tags: {", ".join(tag.name for tag in self.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in self.contained_by_projects)}{escape("]")}"
-backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.contain_todos)}[/italic]"
+backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}) {escape("[")}Tags: {", ".join(tag.name for tag in self.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in self.contained_by_projects)}{escape("]")}{" :notebook:" if len(self.notes) > 0 else ""}"
+backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}){" :notebook:" if len(self.notes) > 0 else ""}:\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state}){" :notebook:" if len(todo.notes) > 0 else ""}" for todo in self.contain_todos)}[/italic]"
 backend.models.Tag.__rich__ = lambda self: f"[bold]{self.name}[/bold] (ID {self.id}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.todos)}[/italic]"
+backend.models.Note.__rich__ = lambda self: f"Note ID {self.id} ({len(self.todos)} todos): [italic]{repr(self)}[/italic]"
 
 def _separate_identifiers(identifiers: Iterable[str]) -> tuple[set[int], set[str]]:
     unique_identifiers = set(identifiers)
@@ -79,12 +80,10 @@ def get(
         "include_completed": include_completed,
     }
     if primary_descriptor is not None:
-        kwargs["filter_by"] = {
-            getattr(
-                backend.models,
-                model_name,
-            ).primary_descriptor: primary_descriptor
-        }
+        kwargs["filter_by"] = _build_instance_identifier_filter_by(
+            model_name,
+            primary_descriptor,
+        )
     if projects is not None:
         kwargs["where"] = getattr(backend.models, model_name).contained_by_projects.any(_build_project_filter(projects))
     if tags is not None:
@@ -214,6 +213,30 @@ def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
 
         for instance, tag in product(instances, tags):
             instance.tags.append(tag)
+
+@app.command()
+def attach_note(model_name: str, instance_identifier: str, note_identifier: str) -> None:
+    with sessionmaker() as session, session.begin():
+        instances = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                instance_identifier,
+            ),
+            session=session,
+        )
+
+        notes = backend.get(
+            "Note",
+            filter_by=_build_instance_identifier_filter_by(
+                "Note",
+                note_identifier,
+            ),
+            session=session,
+        )
+
+        for instance, note in product(instances, notes):
+            instance.notes.append(note)
 
 if __name__ == "__main__":
     app()
