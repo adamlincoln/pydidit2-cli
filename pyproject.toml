@@ -10,6 +10,7 @@ authors = [
 dependencies = [
     "typer (>=0.16.0,<0.17.0)",
     "pydidit2-backend @ git+https://github.com/adamlincoln/pydidit2-backend.git",
+    "dateparser (>=1.2.2,<2.0.0)",
 ]
 
 [project.scripts]

@@ -4,6 +4,7 @@ from functools import partial
 from itertools import product
 from typing import Annotated
 
+import dateparser
 import pydiditbackend as backend
 import typer
 from pydiditbackend.utils import build_rds_db_url
@@ -188,6 +189,27 @@ def complete(model_name: str, instance_identifier: str) -> None:
 
         for instance in instances:
             backend.mark_completed(model_name, instance.id, session=session)
+
+@app.command()
+def due(model_name: str, instance_identifier: str, due: str) -> None:
+    with sessionmaker() as session, session.begin():
+        instances = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                instance_identifier,
+            ),
+            session=session,
+        )
+
+        for instance in instances:
+            if len(due) == 0:
+                instance.due = None
+            else:
+                due_dt = dateparser.parse(due)
+                if due_dt is None:
+                    raise ValueError(f"{due} could not be made into a datetime.")
+                instance.due = due_dt
 
 @app.command()
 def contain_todo(project_id: int, todo_id: int) -> None:
