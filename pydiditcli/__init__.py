@@ -8,9 +8,11 @@ import pydiditbackend as backend
 import typer
 from pydiditbackend.utils import build_rds_db_url
 from rich import print as rich_print
-from rich.markup import escape
+from rich.console import Console
 from sqlalchemy import create_engine, and_, or_
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
+
+from pydiditcli import presentation
 
 app = typer.Typer()
 
@@ -19,10 +21,10 @@ db_url = build_rds_db_url(os.environ["PYDIDIT_DB_URL"])
 sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
 backend.prepare(sessionmaker)
 
-backend.models.Todo.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}) {escape("[")}Tags: {", ".join(tag.name for tag in self.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in self.contained_by_projects)}{escape("]")}{" :notebook:" if len(self.notes) > 0 else ""}"
-backend.models.Project.__rich__ = lambda self: f"[bold]{self.description}[/bold] (ID {self.id}, {self.state}){" :notebook:" if len(self.notes) > 0 else ""}:\n  [italic]{"\n  ".join(f"* {todo.description} (ID {todo.id}, {todo.state}){" :notebook:" if len(todo.notes) > 0 else ""}" for todo in self.contain_todos)}[/italic]"
-backend.models.Tag.__rich__ = lambda self: f"[bold]{self.name}[/bold] (ID {self.id}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in self.todos)}[/italic]"
-backend.models.Note.__rich__ = lambda self: f"Note ID {self.id} ({len(self.todos)} todos): [italic]{repr(self)}[/italic]"
+backend.models.Todo.__rich__ = presentation.todo_rich
+backend.models.Project.__rich__ = presentation.project_rich
+backend.models.Tag.__rich__ = presentation.tag_rich
+backend.models.Note.__rich__ = presentation.note_rich
 
 def _separate_identifiers(identifiers: Iterable[str]) -> tuple[set[int], set[str]]:
     unique_identifiers = set(identifiers)
@@ -96,7 +98,12 @@ def get(
         model_name,
         **kwargs,
     ):
-        rich_print(el)
+        if model_name == "Note":
+            console = Console()
+            with console.pager():
+                console.print(el.text)
+        else:
+            rich_print(el)
 
 @app.command()
 def put(
