@@ -37,6 +37,20 @@ def _build_related_filter(model_name: str, identifiers: Iterable[str]):
         model.id.in_(ids),
     )
 
+def _build_instance_identifier_filter_by(
+    model_name: str,
+    instance_identifier: str,
+) -> dict[str, int | str]:
+    if instance_identifier.isdigit():
+        return {"id": int(instance_identifier)}
+    else:
+        return {
+            getattr(
+                backend.models,
+                model_name,
+            ).primary_descriptor: instance_identifier,
+        }
+
 _build_project_filter = partial(_build_related_filter, "Project")
 _build_tag_filter = partial(_build_related_filter, "Tag")
 
@@ -132,18 +146,39 @@ def put(
         backend.put(instance, session=session)
 
 @app.command()
+def edit(
+    model_name: str,
+    instance_identifier: str,
+    new_value: str,
+) -> None:
+    with sessionmaker() as session, session.begin():
+        instances = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                instance_identifier,
+            ),
+            session=session,
+        )
+
+        for instance in instances:
+            setattr(instance, instance.primary_descriptor, new_value)
+
+@app.command()
 def delete(model_name: str, instance_id: int) -> None:
     backend.delete(model_name, instance_id)
 
 @app.command()
 def complete(model_name: str, instance_identifier: str) -> None:
     with sessionmaker() as session, session.begin():
-        filter_by = {}
-        if instance_identifier.isdigit():
-            filter_by["id"] = int(instance_identifier)
-        else:
-            filter_by[getattr(backend.models, model_name).primary_descriptor] = instance_identifier
-        instances = backend.get(model_name, filter_by=filter_by, session=session)
+        instances = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                instance_identifier,
+            ),
+            session=session,
+        )
 
         for instance in instances:
             backend.mark_completed(model_name, instance.id, session=session)
@@ -159,19 +194,23 @@ def contain_todo(project_id: int, todo_id: int) -> None:
 @app.command()
 def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
     with sessionmaker() as session, session.begin():
-        target_filter_by = {}
-        if instance_identifier.isdigit():
-            target_filter_by["id"] = int(instance_identifier)
-        else:
-            target_filter_by[getattr(backend.models, model_name).primary_descriptor] = instance_identifier
-        instances = backend.get(model_name, filter_by=target_filter_by, session=session)
+        instances = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                instance_identifier,
+            ),
+            session=session,
+        )
 
-        tag_filter_by = {}
-        if tag_identifier.isdigit():
-            tag_filter_by["id"] = int(tag_identifier)
-        else:
-            tag_filter_by["name"] = tag_identifier
-        tags = backend.get("Tag", filter_by=tag_filter_by, session=session)
+        tags = backend.get(
+            "Tag",
+            filter_by=_build_instance_identifier_filter_by(
+                "Tag",
+                instance_identifier,
+            ),
+            session=session,
+        )
 
         for instance, tag in product(instances, tags):
             instance.tags.append(tag)
