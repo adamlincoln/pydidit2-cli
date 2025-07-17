@@ -235,7 +235,7 @@ def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
             "Tag",
             filter_by=_build_instance_identifier_filter_by(
                 "Tag",
-                instance_identifier,
+                tag_identifier,
             ),
             session=session,
         )
