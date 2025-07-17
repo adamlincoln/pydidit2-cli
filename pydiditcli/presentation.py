@@ -9,7 +9,7 @@ def todo_rich(todo) -> str:
     if todo.due is not None:
         now = datetime.now()
         due_past_threshold = todo.due - now < due_threshold
-    due = "" if todo.due is None else f"Due: {"[bold red]" if due_past_threshold else ""}{todo.due.isoformat()}{"[/bold red]" if due_past_threshold else ""} "
+    due = "" if todo.due is None else f"Due: {"[bold red]" if due_past_threshold else "[blue]"}{todo.due.isoformat()}{"[/bold red]" if due_past_threshold else "[/blue]"} "
     return f"[bold]{todo.description}[/bold] (ID {todo.id}, {todo.state}) {due}{escape("[")}Tags: {", ".join(tag.name for tag in todo.tags)}{escape("]")} {escape("[")}Projects: {", ".join(project.description for project in todo.contained_by_projects)}{escape("]")}{", ".join(f":notebook:{note.id}" for note in todo.notes)}"
 
 def project_rich(project) -> str:
