@@ -19,7 +19,7 @@ app = typer.Typer()
 
 db_url = build_rds_db_url(os.environ["PYDIDIT_DB_URL"])
 
-sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url))
+sessionmaker = sqlalchemy_sessionmaker(create_engine(db_url, echo=False))
 backend.prepare(sessionmaker)
 
 backend.models.Todo.__rich__ = presentation.todo_rich
@@ -170,6 +170,54 @@ def edit(
 
         for instance in instances:
             setattr(instance, instance.primary_descriptor, new_value)
+
+@app.command()
+def move(
+    model_name: str,
+    instance_identifier: str,
+    new_display_position: str,
+    *,
+    direct_display_position: Annotated[
+        bool,
+        typer.Option(
+            help="Use the provided integer as the new display position.  (By default, the provided integer is used as the ID of the instance currently in the target position.)",
+        ),
+    ] = False,
+) -> None:
+    instances = backend.get(
+        model_name,
+        filter_by=_build_instance_identifier_filter_by(
+            model_name,
+            instance_identifier,
+        ),
+    )
+
+    if len(instances) != 1:
+        raise ValueError("There must be only one instance to move.")
+
+    instance = instances[0]
+
+    if new_display_position in ("start", "end"):
+        backend.move(instance, new_display_position)
+        return
+
+    if direct_display_position:
+        target_display_position = int(new_display_position)
+    else:
+        targets = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                new_display_position,
+            ),
+        )
+
+        if len(targets) != 1:
+            raise ValueError("There must be only one target.")
+
+        target_display_position = targets[0].display_position
+
+    backend.move(instance, target_display_position)
 
 @app.command()
 def delete(model_name: str, instance_id: int) -> None:

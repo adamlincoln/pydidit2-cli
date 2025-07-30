@@ -22,7 +22,7 @@ def project_rich(project) -> str:
     return f"[bold]{project.description}[/bold] (ID {project.id}, {project.state}) {due}{", ".join(f":notebook:{note.id}" for note in project.notes)}:\n  [italic]{"\n  ".join(f"* {todo.description} (ID {todo.id}, {todo.state}){", ".join(f":notebook:{note.id}" for note in todo.notes)}" for todo in project.contain_todos)}[/italic]"
 
 def tag_rich(tag) -> str:
-    return f"[bold]{tag.name}[/bold] (ID {tag.id}):\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in tag.todos)}[/italic]"
+    return f"[bold]{tag.name}[/bold] (ID {tag.id}):\nTodos:\n  [italic]{"\n  ".join(f"* {todo.description} ({todo.state})" for todo in tag.todos)}[/italic]\nProjects:\n [italic]{"\n  ".join(f"* {project.description} ({project.state})" for project in tag.projects)}[/italic]"
 
 def note_rich(note):
     return f"Note ID {note.id} ({len(note.todos)} todos): [italic]{repr(note)}[/italic]"
