@@ -10,6 +10,7 @@ import typer
 from pydiditbackend.utils import build_rds_db_url
 from rich import print as rich_print
 from rich.console import Console
+from rich.pretty import Pretty
 from sqlalchemy import create_engine, and_, or_
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
 
@@ -102,6 +103,7 @@ def get(
         if model_name == "Note":
             console = Console()
             with console.pager():
+                console.print(Pretty(el))
                 console.print(el.text)
         else:
             rich_print(el)
