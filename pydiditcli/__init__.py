@@ -29,7 +29,7 @@ backend.models.Note.__rich__ = presentation.note_rich
 
 def _separate_identifiers(identifiers: Iterable[str]) -> tuple[set[int], set[str]]:
     unique_identifiers = set(identifiers)
-    ids = {potential_id for potential_id in unique_identifiers if potential_id.isdigit()}
+    ids = {int(potential_id) for potential_id in unique_identifiers if potential_id.isdigit()}
     primary_descriptors = unique_identifiers - ids
     return ids, primary_descriptors
 
