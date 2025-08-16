@@ -270,6 +270,40 @@ def contain_todo(project_id: int, todo_id: int) -> None:
         )
 
 @app.command()
+def untag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
+    with sessionmaker() as session, session.begin():
+        instances = backend.get(
+            model_name,
+            filter_by=_build_instance_identifier_filter_by(
+                model_name,
+                instance_identifier,
+            ),
+            session=session,
+        )
+
+        tags = backend.get(
+            "Tag",
+            filter_by=_build_instance_identifier_filter_by(
+                "Tag",
+                tag_identifier,
+            ),
+            session=session,
+        )
+
+        if len(instances) != 1:
+            raise ValueError("Must specify exactly one instance.")
+
+        if len(tags) != 1:
+            raise ValueError("Must specify exactly one real tag to remove.")
+
+        try:
+            instances[0].tags.remove(tags[0])
+        except ValueError:
+            raise ValueError(
+                f"The tag {tags[0].name} is not found on {model_name} {instances[0].id}.",
+            )
+
+@app.command()
 def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
     with sessionmaker() as session, session.begin():
         instances = backend.get(
