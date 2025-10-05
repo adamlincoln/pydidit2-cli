@@ -305,6 +305,13 @@ def untag(model_name: str, instance_identifier: str, tag_identifier: str) -> Non
 
 @app.command()
 def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
+    _tag(model_name, instance_identifier, tag_identifier)
+
+@app.command()
+def untag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
+    _tag(model_name, instance_identifier, tag_identifier, remove=True)
+
+def _tag(model_name: str, instance_identifier: str, tag_identifier: str, *, remove: bool = False) -> None:
     with sessionmaker() as session, session.begin():
         instances = backend.get(
             model_name,
@@ -325,7 +332,15 @@ def tag(model_name: str, instance_identifier: str, tag_identifier: str) -> None:
         )
 
         for instance, tag in product(instances, tags):
-            instance.tags.append(tag)
+            if remove:
+                try:
+                    instance.tags.remove(tag)
+                except ValueError as e:
+                    raise ValueError(
+                        f"The tag {tags[0].name} is not found on {model_name} {instances[0].id}.",
+                    ) from e
+            else:
+                instance.tags.append(tag)
 
 @app.command()
 def attach_note(model_name: str, instance_identifier: str, note_identifier: str) -> None:
